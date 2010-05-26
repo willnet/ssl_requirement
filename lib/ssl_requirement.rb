@@ -26,37 +26,63 @@ module SslRequirement
 
   module ClassMethods
     # Specifies that the named actions requires an SSL connection to be performed (which is enforced by ensure_proper_protocol).
-    def ssl_required(*actions)
-      write_inheritable_array(:ssl_required_actions, actions)
+    def ssl_required(options = {})
+      write_inheritable_hash(:ssl_required_options, options)
     end
 
-    def ssl_allowed(*actions)
-      write_inheritable_array(:ssl_allowed_actions, actions)
+    def ssl_allowed(options = {})
+      write_inheritable_hash(:ssl_allowed_options, actions)
     end
   end
-  
+
   protected
-    # Returns true if the current action is supposed to run as SSL
-    def ssl_required?
-      (self.class.read_inheritable_attribute(:ssl_required_actions) || []).include?(action_name.to_sym)
+
+  # Returns true if the current action is supposed to run as SSL
+  def ssl_required?
+    result = false
+    options = self.class.read_inheritable_attribute(:ssl_required_options)
+    if options.nil?
+      # do nothing
+    elsif options.blank?
+      result = true
+    elsif only = options[:only]
+      only = only.kind_of?(Array) ? only : [only]
+      result = only.include?(action_name.to_sym)
+    elsif except = options[:except]
+      except = except.kind_of?(Array) ? except : [except]
+      result = !except.include?(action_name.to_sym)
     end
-    
-    def ssl_allowed?
-      (self.class.read_inheritable_attribute(:ssl_allowed_actions) || []).include?(action_name.to_sym)
+    result
+  end
+
+  def ssl_allowed?
+    result = false
+    options = self.class.read_inheritable_attribute(:ssl_allowed_options)
+    if options.nil?
+      # do nothing
+    elsif options.blank?
+      result = true
+    elsif only = options[:only]
+      only = only.kind_of?(Array) ? only : [only]
+      result = only.include?(action_name.to_sym)
+    elsif except = options[:except]
+      except = except.kind_of?(Array) ? except : [except]
+      result = !except.include?(action_name.to_sym)
     end
+    result
+  end
 
   private
-    def ensure_proper_protocol
-      return true if ssl_allowed?
-
-      if ssl_required? && !request.ssl?
-        redirect_to "https://" + request.host + request.fullpath
-        flash.keep
-        return false
-      elsif request.ssl? && !ssl_required?
-        redirect_to "http://" + request.host + request.fullpath
-        flash.keep
-        return false
-      end
+  def ensure_proper_protocol
+    return true if ssl_allowed?
+    if ssl_required? && !request.ssl?
+      redirect_to "https://" + request.host + request.fullpath
+      flash.keep
+      return false
+    elsif request.ssl? && !ssl_required?
+      redirect_to "http://" + request.host + request.fullpath
+      flash.keep
+      return false
     end
+  end
 end
